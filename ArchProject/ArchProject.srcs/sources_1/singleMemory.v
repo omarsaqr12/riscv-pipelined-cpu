@@ -12,8 +12,11 @@ output [31:0] data_out
     reg [7:0] mem[(4*1024-1):0];
 
 
+  // Program image: one byte per line (binary), little-endian per 32-bit word.
+  // A sample is provided in Test_cases/program.mem (produced by Instruction_generator.py).
+  // The path is resolved relative to the simulator's working directory; adjust if needed.
   initial begin
-    $readmemb("C:\\Users\\noort\\OneDrive\\Documents\\FemRV32 Processor\\Test_cases\\output (4).txt", memory_array);
+    $readmemb("program.mem", mem);
   end
 
 

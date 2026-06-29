@@ -1,4 +1,16 @@
-# Vivado/Xilinx project artifacts
+# ── Vivado / Xilinx generated project data ───────────────────────────
+# Trailing-slash patterns match these directories at any depth
+# (e.g. ArchProject/ArchProject.cache/, ArchProject/ArchProject.sim/)
+*.cache/
+*.hw/
+*.sim/
+*.runs/
+*.ip_user_files/
+*.gen/
+*.Xil/
+**/sources_1/ip/
+
+# Vivado logs / journals / reports / dumps
 *.jou
 *.log
 *.str
@@ -8,19 +20,12 @@
 *.wdb
 *.wcfg
 *.xpr.lock
-*.Xil/**
-*.runs/**
-*.cache/**
-*.hw/**
-*.sim/**
-*.ip_user_files/**
-*.srcs/sources_1/ip/**
 
-# Generated simulation outputs
-**/xsim/**
-**/modelsim/**
-**/questa/**
-**/riviera/**
+# Simulation outputs
+**/xsim/
+**/modelsim/
+**/questa/
+**/riviera/
 **/wave.vcd
 
 # Python
@@ -32,11 +37,11 @@ __pycache__/
 venv/
 *.env
 
-# Generated programs
-program.txt
-program.bin.txt
+# Generated program images (Test_cases/program.mem is kept as a committed sample)
+/program.txt
+/program.bin.txt
 
-# OS/editor
+# OS / editor
 .DS_Store
 Thumbs.db
 .vscode/
