@@ -1,17 +1,19 @@
-name: Branch decoder regression
+name: Focused HDL and fixture checks
 on:
   pull_request:
   push:
     branches: [main]
 jobs:
-  branch-decoder:
+  focused-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - name: Validate sample program image (not CPU execution)
+        run: python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Install Icarus Verilog
         run: sudo apt-get update && sudo apt-get install -y iverilog
-      - name: Compile and run self-checking decoder test
+      - name: Compile and run self-checking branch-decoder test
         run: |
           iverilog -g2012 -s branch_decoder_tb -o /tmp/branch_decoder_tb \
             tests/branch_decoder_tb.v ArchProject/ArchProject.srcs/sources_1/branchDecoder.v
