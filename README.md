@@ -1,164 +1,54 @@
-# RISC-V Pipelined CPU (RV32IM)
+# FemRV32: a course-project RISC-V processor in Verilog
 
-![HDL](https://img.shields.io/badge/HDL-Verilog-1f6feb)
-![ISA](https://img.shields.io/badge/ISA-RV32I%20%2B%20RV32M-orange)
-![Simulation](https://img.shields.io/badge/Sim-Vivado%20XSim-2ea043)
-![License](https://img.shields.io/badge/License-MIT-yellow)
+A team-built, educational 32-bit RISC-V processor project containing a five-stage **pipeline prototype** and an earlier single-cycle datapath. The RTL includes instruction decoding, a register file, ALU with attempted RV32M operations, unified byte-addressable memory, pipeline registers, a forwarding path, and branch redirection. This is a repository of real hardware-design work **in progress**, not a verified RV32IM-compliant core or a proven FPGA implementation.
 
-A 32-bit RISC-V soft-core processor written from scratch in Verilog. It implements the
-**RV32I** base integer instruction set plus the **RV32M** multiply/divide extension in a
-five-stage pipeline with data forwarding and control-hazard handling. The design is
-functionally verified in **Xilinx Vivado (XSim)** using a directed, instruction-by-instruction
-testbench and a Python-based randomized program generator.
+> **Verification status:** The original `CPU_tb.v` drives only clock and reset; it has no functional assertions or pass/fail result. A self-checking *branch-decoder unit test* has been added in this audit. Full-core instruction execution, RV32M arithmetic, pipeline hazards, synthesis, timing, and FPGA behavior have **not** been independently verified here. See [verification and known issues](#verification-and-known-issues) before reusing the design.
 
-> Originally built as a computer-architecture course project ("FemRV32"). The repository
-> includes two complementary cores: an initial **single-cycle** datapath and the main
-> **5-stage pipelined** core that the testbench exercises.
+## Design at a glance
 
----
+The main `RISCV_Pipeline` prototype follows fetch → decode → execute → memory → writeback, with IF/ID, ID/EX, EX/MEM, and MEM/WB registers. Its `singleMemory` time-multiplexes instruction reads and data accesses across clock phases. `forwarding_unit` currently checks only a MEM/WB register match and forwards the **ALU output**, not the final writeback value. `hazard_detection_unit` is a redirect flush signal, not a full load-use stall detector. Consequently, do not assume back-to-back dependent instructions work. The earlier `final_top.v` is separate historical RTL, not a validated reference implementation.
 
-## Highlights
+| Area | Source |
+| --- | --- |
+| Pipeline and stage connections | [`RISCV_Pipeline.v`](ArchProject/ArchProject.srcs/sources_1/RISCV_Pipeline.v) |
+| Control and immediate decode | [`controlUnit.v`](ArchProject/ArchProject.srcs/sources_1/controlUnit.v), [`prv32_imm.v`](ArchProject/ArchProject.srcs/sources_1/prv32_imm.v) |
+| Arithmetic and shifts | [`prv32_ALU.v`](ArchProject/ArchProject.srcs/sources_1/prv32_ALU.v), [`shifter.v`](ArchProject/ArchProject.srcs/sources_1/shifter.v) |
+| Dependencies and hazards | [`forwarding_unit.v`](ArchProject/ArchProject.srcs/sources_1/forwarding_unit.v), [`hazard_detection_unit.v`](ArchProject/ArchProject.srcs/sources_1/hazard_detection_unit.v) |
+| Instruction/data memory | [`singleMemory.v`](ArchProject/ArchProject.srcs/sources_1/singleMemory.v) |
+| Simulation harness | [`CPU_tb.v`](ArchProject/ArchProject.srcs/sources_1/CPU_tb.v) |
+| Original design report | [`Report.docx`](Report.docx) |
 
-- **Complete RV32I base ISA** — loads/stores (byte / half / word, signed & unsigned),
-  register/immediate ALU ops, shifts, `SLT`/`SLTU`, all six branches, `JAL`/`JALR`,
-  `LUI`/`AUIPC`.
-- **RV32M extension** in the ALU — `MUL`, `MULH`, `MULHSU`, `MULHU`, `DIV`, `DIVU`,
-  `REM`, `REMU`.
-- **5-stage pipeline** (IF → ID → EX → MEM → WB) with explicit pipeline registers.
-- **Data forwarding** unit plus a **flush unit** that squashes the pipeline on taken
-  branches and jumps.
-- **Byte-addressable memory** with sub-word access and correct sign/zero extension on loads.
-- **Two verification paths** — a self-documenting directed test that touches every base
-  instruction, and a randomized RV32I program generator for stress testing.
+## Inspecting and running
 
-## Supported instructions
-
-| Category | Instructions |
-|---|---|
-| Loads | `LB` `LH` `LW` `LBU` `LHU` |
-| Stores | `SB` `SH` `SW` |
-| ALU (register) | `ADD` `SUB` `SLL` `SLT` `SLTU` `XOR` `SRL` `SRA` `OR` `AND` |
-| ALU (immediate) | `ADDI` `SLTI` `SLTIU` `XORI` `ORI` `ANDI` `SLLI` `SRLI` `SRAI` |
-| Branches | `BEQ` `BNE` `BLT` `BGE` `BLTU` `BGEU` |
-| Jumps | `JAL` `JALR` |
-| Upper immediate | `LUI` `AUIPC` |
-| RV32M | `MUL` `MULH` `MULHSU` `MULHU` `DIV` `DIVU` `REM` `REMU` |
-| System | `FENCE` (decoded as a no-op) |
-
-## Architecture
-
-```
-        IF              ID                 EX               MEM              WB
-   +-----------+   +-------------+   +-------------+   +-----------+   +-----------+
-   | PC /      |   | Decode /    |   | ALU /       |   | Data      |   | Write     |
-   | Fetch     |-->| Reg File /  |-->| Shifter /   |-->| Memory    |-->| back to   |
-   |           |   | ImmGen /    |   | Branch cmp  |   | access    |   | Reg File  |
-   +-----------+   | Control     |   +-------------+   +-----------+   +-----------+
-        ^          +-------------+         ^                                 |
-        |                                  |  forward (WB result -> EX)      |
-        |                                  +---------------------------------+
-        |
-        +-- redirect / flush on taken branch, JAL, or JALR
-```
-
-Key microarchitecture choices:
-
-- **Pipeline registers** `IF/ID`, `ID/EX`, `EX/MEM`, `MEM/WB` carry data and control
-  signals down the pipe (see [`RISCV_Pipeline.v`](ArchProject/ArchProject.srcs/sources_1/RISCV_Pipeline.v)).
-- **Shared single-port memory** ([`singleMemory.v`](ArchProject/ArchProject.srcs/sources_1/singleMemory.v))
-  services instruction fetch on one clock phase and data access on the other, removing the
-  structural hazard of a single memory without a separate I/D cache.
-- **Forwarding** ([`forwarding_unit.v`](ArchProject/ArchProject.srcs/sources_1/forwarding_unit.v))
-  routes the write-back result into the execute stage when a source register matches a
-  pending destination, avoiding read-after-write stalls.
-- **Control hazards** ([`hazard_detection_unit.v`](ArchProject/ArchProject.srcs/sources_1/hazard_detection_unit.v))
-  are resolved by flushing the in-flight instruction when a branch is taken or a jump
-  executes, then redirecting the PC.
-- **ALU control** ([`ALUCU.v`](ArchProject/ArchProject.srcs/sources_1/ALUCU.v)) decodes the
-  opcode class, `funct3`, and `funct7` bits into a 5-bit ALU operation select that also
-  selects the RV32M datapath.
-
-## Repository structure
-
-```
-.
-├── ArchProject/
-│   ├── ArchProject.srcs/sources_1/      # Verilog RTL + testbench
-│   │   ├── RISCV_Pipeline.v             # main 5-stage pipelined core (DUT)
-│   │   ├── final_top.v                  # earlier single-cycle datapath (reference)
-│   │   ├── CPU_tb.v                     # testbench (clock/reset, drives the pipeline)
-│   │   ├── controlUnit.v  ALUCU.v  branchDecoder.v  prv32_imm.v
-│   │   ├── prv32_ALU.v  shifter.v       # ALU + barrel shifter (RV32I/M)
-│   │   ├── RegisterFile.v  NRegister.v  DFlipFlop.v
-│   │   └── singleMemory.v  InstMem.v  DataMem.v
-│   ├── Instruction_generator.py         # randomized RV32I program generator
-│   └── ArchProject.xpr                  # Vivado project file
-├── Test_cases/
-│   ├── program.mem                      # sample program image ($readmemb input)
-│   └── WhatTheInstructionsDo.txt        # directed test: expected per-instruction effects
-├── Journal/journal.txt                  # development log
-├── Report.docx                          # full project report
-├── LICENSE
-└── README.md
-```
-
-## Getting started
-
-**Prerequisites:** Xilinx Vivado (tested with the built-in XSim simulator) and Python 3.8+.
-
-### Run the simulation
-
-1. Open `ArchProject/ArchProject.xpr` in Vivado (**File → Open Project**), or create a new
-   project and add every `.v` file under `ArchProject/ArchProject.srcs/sources_1/`.
-2. Set [`CPU_tb`](ArchProject/ArchProject.srcs/sources_1/CPU_tb.v) as the simulation top.
-3. Make the program image visible to the simulator (see below), then run **Behavioral
-   Simulation** and inspect the register file / memory in the waveform viewer.
-
-### Load a program
-
-The core initializes its memory with Verilog `$readmemb` from a byte-per-line image
-(one 8-bit value per line, little-endian within each 32-bit word). A ready-to-use sample
-is at [`Test_cases/program.mem`](Test_cases/program.mem).
-
-`$readmemb` resolves its path relative to the simulator's working directory, so either copy
-`program.mem` into the XSim run directory, add it as a simulation source, or edit the path
-string in [`singleMemory.v`](ArchProject/ArchProject.srcs/sources_1/singleMemory.v).
-
-To generate a fresh randomized program:
+For a focused, self-checking **decoder-only** regression, install Icarus Verilog and run from the repository root:
 
 ```bash
-python ArchProject/Instruction_generator.py
+iverilog -g2012 -s branch_decoder_tb -o /tmp/branch_decoder_tb \
+  tests/branch_decoder_tb.v ArchProject/ArchProject.srcs/sources_1/branchDecoder.v
+vvp /tmp/branch_decoder_tb
 ```
 
-This writes `program.txt` (human-readable listing) and `program.bin.txt` (the byte-encoded
-image); rename or point the simulator at the byte image to load it.
+The test covers taken and untaken branch conditions, including a taken-then-untaken BEQ regression. It does **not** exercise the whole processor. This command is supplied for independent reproduction; no HDL simulator was available in the audit environment, so its result is **not claimed as PASS**.
 
-## Verification
+To explore the historical top-level design in Vivado, create a **new** project, add the Verilog files in `ArchProject/ArchProject.srcs/sources_1/`, and use `CPU_tb` as simulation top and `RISCV_Pipeline` as DUT. Do not rely on `ArchProject/ArchProject.xpr` as a portable project: it references removed `imports/Downloads/...` and `sources_1/new/...` files from the original author's machine. Use Vivado 2024.2 if possible, though the new-project flow is not verified here. Place [`Test_cases/program.mem`](Test_cases/program.mem) in the simulation working directory: `singleMemory.v` calls `$readmemb("program.mem", mem)` and expects one binary byte per line, little-endian within a word. Inspect traces critically; the original clock/reset-only simulation cannot tell you whether instructions executed correctly.
 
-The processor is verified in two complementary ways:
+**Do not run the historical program generator as a quickstart.** [`Instruction_generator.py`](ArchProject/Instruction_generator.py) defaults to 10,000,000 instructions / 1,000,000 labels, far beyond the 4 KiB RTL memory. Its random branch targets are not constrained to representable branch/jump offsets, and generated programs do not come with an independent execution oracle. The sample image is a historical input, not a passing test fixture.
 
-1. **Directed test** — a hand-assembled program that exercises every base instruction with
-   pre-computed expected results, documented step by step (including register and PC
-   transitions) in [`WhatTheInstructionsDo.txt`](Test_cases/WhatTheInstructionsDo.txt).
-   This makes it straightforward to diff observed waveform state against expected state.
-2. **Randomized stress testing** — [`Instruction_generator.py`](ArchProject/Instruction_generator.py)
-   emits large random RV32I programs (with valid encodings and branch/jump targets) to
-   shake out hazard, forwarding, and control-flow corner cases.
+## Verification and known issues
 
-## Roadmap
+The following are source-inspection findings, not claims of reproduced hardware failures:
 
-Natural next steps for the project:
+| Priority | Evidence and implication |
+| --- | --- |
+| High | The original BEQ path in `branchDecoder.v` left `branchOrNot` unchanged when equality was false, inferring state; this audit supplies a combinational fix and a regression test. The regression has not been run in HDL simulation here. |
+| High | `prv32_ALU.v` uses nonblocking assignments to temporary divide/remainder operands and results inside a combinational block; signed/unsigned corner cases and divide-by-zero handling remain unverified. Do not claim complete RV32M. |
+| High | `forwarding_unit.v` only selects MEM/WB and `RISCV_Pipeline.v` forwards its ALU value rather than final writeback data. Load-to-use, jump-link, and other dependent paths require architectural tests and probably design changes. |
+| High | `CPU_tb.v` has no assertions, finish condition, register/memory scoreboard, or ISA oracle. `Test_cases/WhatTheInstructionsDo.txt` is an explanatory worksheet, not an executable test. |
+| Medium | `ArchProject.xpr` has machine-specific source references; a fresh-checkout Vivado project must use the checked-in source files. |
+| Medium | The generator's default workload exceeds memory capacity and branch/jump offset constraints; it is retained for provenance but is not a runnable verification workflow. |
 
-- FPGA synthesis and implementation with board constraints (e.g. Artix-7 / Nexys A7),
-  including timing closure and a top-level I/O wrapper.
-- Full forwarding paths and explicit load-use stall insertion.
-- Integration with the official RISC-V architectural test suite (e.g. `riscof`).
+A meaningful next verification milestone is a bounded program with an **independent RV32I reference model**, an explicit stop condition, architectural register/memory comparisons, and directed hazards, branch not-taken cases, negative immediates, JALR target-bit clearing, multiplication high halves, signed remainder, division by zero, and overflow. Only after that should the README enumerate instructions as *verified*. FPGA synthesis and timing require a separate, documented board/target and constraints.
 
-## Authors
+## Attribution and provenance
 
-Built by a three-person team for a computer-architecture course: **Omar Saqr**, **Noor**,
-and **Abed**. See [`Journal/journal.txt`](Journal/journal.txt) for the development log.
-
-## License
-
-Released under the [MIT License](LICENSE).
+Original course-project team: **Omar Saqr, Noor, and Abed**. The contemporaneous [`Journal/journal.txt`](Journal/journal.txt) records examples of individual contributions, including Omar's branch and forwarding work; this public repository is team work, not solely authored by Omar. Existing [`Test_cases/`](Test_cases/) and the original [report](Report.docx) remain available as historical artifacts. The original source files and generator are retained, with an isolated decoder fix and test, rather than being silently rewritten. See [LICENSE](LICENSE).
