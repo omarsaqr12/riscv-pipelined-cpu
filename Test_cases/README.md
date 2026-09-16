@@ -1,0 +1,6 @@
+# Historical test materials
+
+- [`program.mem`](program.mem) is an instruction image: one binary **byte** per line, little-endian within each 32-bit word. The active pipeline's [`singleMemory.v`](../ArchProject/ArchProject.srcs/sources_1/singleMemory.v) loads it with `$readmemb("program.mem", mem)` from the simulator's working directory. A new standard-library [image-format test](../tests/test_program_image.py) checks its basic encoding and capacity constraints, **not** CPU execution.
+- [`WhatTheInstructionsDo.txt`](WhatTheInstructionsDo.txt) is a historical explanatory worksheet. It contains malformed `32'` instruction literals and duplicate assignments, and its early load expectations presume a separately initialized data memory. The pipeline instead uses **unified** instruction/data memory; loading from address zero reads the program's first instruction bytes. This worksheet is **not** a machine-readable or independently checked golden trace for the pipeline.
+
+For a meaningful processor-level test, use a bounded program, deterministic stop, assertions for register/PC/memory state, and a separate RV32I or RV32IM reference interpreter. The current `CPU_tb.v` has no assertions. See [verification status](../docs/VERIFICATION.md) and the [architecture walkthrough](../docs/ARCHITECTURE.md).
