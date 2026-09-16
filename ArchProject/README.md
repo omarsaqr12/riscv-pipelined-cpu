@@ -1,0 +1,7 @@
+# FemRV32 hardware source
+
+The active five-stage prototype is [`ArchProject.srcs/sources_1/RISCV_Pipeline.v`](ArchProject.srcs/sources_1/RISCV_Pipeline.v). Other `.v` files in that directory implement the decoder, ALU/shifter, memory, registers and a minimal clock/reset simulation harness. The separate [`final_top.v`](ArchProject.srcs/sources_1/final_top.v), `InstMem.v` and `DataMem.v` are **earlier single-cycle design artifacts**; they are not the pipeline's reference simulator.
+
+The committed [`ArchProject.xpr`](ArchProject.xpr) is a historical Vivado 2024.2 project snapshot with paths into the original contributors' machines (`imports/Downloads/...` and `sources_1/new/...`). Those paths do not exist in the current repository. For an exploratory simulation, create a fresh Vivado project from the checked-in `.v` files, set `CPU_tb` as simulation top, and make [`../Test_cases/program.mem`](../Test_cases/program.mem) visible in the working directory as `program.mem`. Do not describe these steps as a tested turnkey build: `CPU_tb` contains no self-checking assertions or stop condition.
+
+For the actual datapath and failure-mode map, see [`../docs/ARCHITECTURE.md`](../docs/ARCHITECTURE.md). For reproducible focused checks and work that remains before ISA compliance could be claimed, see [`../docs/VERIFICATION.md`](../docs/VERIFICATION.md). **Do not run** [`Instruction_generator.py`](Instruction_generator.py) with its default 10-million-instruction workload as a quickstart; it exceeds the 4 KiB memory and does not independently check execution.
